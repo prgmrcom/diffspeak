@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""display diffs with counts of leading spaces for each line
+This helps with the case when a screen reader doesn't
+read the number of leading spaces,
+because they're behind a change indicator ( |-|+).
+
+Sample invocation:
+git diff | ./diffspeak
+"""
+
+# MIT License
+
+# Copyright (c) 2020 prgmr.com, incorporated
+
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+#  todo: indent all lines by 5? spaces,
+#  and make sure the line counts get put into those 5 spaces,
+#  so the lines line up with each other
+
+# pylint: disable=too-few-public-methods
+
+import sys
+
+
+class DiffLine:
+    """ Simple per-line wrapper around diff output """
+    __slots__ = ["text", "space"]
+
+    def __init__(self, line):
+        self.text = line
+        if self.may_annotate():
+            #  length of the text, minus the change indicator,
+            #  minus the length of the left-space-stripped text
+            self.space = len(self.text[1:])-(len(self.text[1:].lstrip()))
+
+    def may_annotate(self):
+        """ Whether line may need annotation """
+        if not self.text:
+            return False
+        if (self.text.startswith("+++")
+                or self.text.startswith("@@")
+                or self.text.startswith("---")
+                or self.text.startswith("\\")):
+            return False
+        return True
+
+
+def main():
+    """ Main """
+    lines = [DiffLine(i) for i in sys.stdin.read().split("\n")]
+    last_line_offset = 1
+    for idx, line in enumerate(lines):
+        if idx == 0:
+            continue
+        if not line.may_annotate():
+            last_line_offset = 1
+            continue
+        # Skip over voicing changes for empty lines, but voice
+        # changes from some indentation to 0 indendation.
+        if len(line.text) == 1:
+            last_line_offset += 1
+            continue
+        if (lines[idx-last_line_offset].may_annotate()
+                and line.space == lines[idx-last_line_offset].space):
+            continue
+        line.text = "%s[%s]%s" % (line.text[0], line.space, line.text[1:],)
+        last_line_offset = 1
+
+    print("\n".join([i.text for i in lines]))
+
+
+if __name__ == '__main__':
+    main()
